@@ -134,11 +134,20 @@ Branch: `production` | Last Updated: 2025-01-01
 
 ### 1.1 Hardware Specifications
 
-| Machine       | CPU Model       | Generation                       | Baremetal bitrate | C-RAN bitrate | Model ID | Cores       | AV2         | Memory | NIC                                  | OS          | Status                     |
-| :---          | :---            | :---                             |  :----                 | :---          | :---     | :---        | :---        | :---   | :---                                 | :---        | :---                       |
-| **Joule**     | Xeon Gold 6326Y | **3rd Gen (Ice Lake-SP)**        |     ~600Mbps              | ~300Mbps      | 106      | 16C/32T     | Support     | 128GB  | Intel E810-XXV                       | RHEL 9.6 RT | ✅                         |
-| **Lavoisier** | Xeon Gold 6433N | **4th Gen (Sapphire Rapids-SP)** |  ~600Mbps                  | ~300Mbps      | 143      | **32C/64T** | Support     | 256GB  | Intel E810-XXV | RHEL 9.2 RT | ⚠️                         |
-| **Newton**    | Xeon E5-2695 v4 | **v4 (Broadwell-EP)**            |                   | N/A           | 79       | **18C/36T** | **Support** | 64GB   | N/A                                  | RHEL 9.5 RT | Will handle nonRT Workload |
+| Machine       | CPU Model       | Generation                       | Model ID | Cores       | AV2         | Memory | NIC            | OS          |
+| :---          | :---            | :---                             | :---     | :---        | :---        | :---   | :---           | :---        |
+| **Joule**     | Xeon Gold 6326Y | **3rd Gen (Ice Lake-SP)**        | 106      | 16C/32T     | Support     | 128GB  | Intel E810-XXV | RHEL 9.6 RT |
+| **Lavoisier** | Xeon Gold 6433N | **4th Gen (Sapphire Rapids-SP)** | 143      | **32C/64T** | Support     | 256GB  | Intel E810-XXV | RHEL 9.2 RT |
+| **Newton**    | Xeon E5-2695 v4 | **v4 (Broadwell-EP)**            | 79       | **18C/36T** | **Support** | 64GB   | N/A            | RHEL 9.5 RT |
+
+| Machine   | Node         | O-RU                                                          | DL       | UL          | Remarks         | VLAN |
+| -         | -            | -                                                             | -        | -           | -               | -    |
+| Joule     | worker-rt-00 | Jura                                                          | ...      | ...         | Worker Reconfig | 3    |
+|           |              | Pegatron                                                      | ...      | ...         | Worker Reconfig | 103  |
+|           |              | LiteOn                                                        | ...      | ...         | Worker Reconfig | 6    |
+| Lavoisier | lavoisier    | [**Jura**](#10.4-data-plane-test%3A-lavoisier---pegatron)     | 216 Mbps | 60.041 Mbps |                 | 3    |
+|           |              | [**Pegatron**](#10.4-data-plane-test%3A-lavoisier---pegatron) | 461 Mbps | 55.65 Mbps  |                 | 103  |
+|           |              | [**LiteOn**]()                                                | ...      | ...         | Worker dont have VLAN 6 yet            | 6    |
 
 
 ### 1.2 Cluster Network Topology
@@ -1204,6 +1213,7 @@ kubectl logs -n oai-gnb <pod-name> -f
 | VLAN | 4 |
 | MTU | 9216 |
 
+
 **O-RU Configuration:**
 ```
 Band Width              : 100000000 (100 MHz)
@@ -1233,14 +1243,11 @@ show oru-status
 # DuConnected : Ready
 ```
 
-![O-RU Status](../study-note-gnb-gh72-kubernetes/image%207.png)
-
 **gNB Connection:**
 ```bash
 kubectl logs -n oai-gnb <pod-name> | grep -E "o-du|pusch|prach"
 ```
 
-![gNB O-RU Connection](../study-note-gnb-gh72-kubernetes/image%202.png)
 
 ### 9.2 LiteON C3 Integration (worker-rt-01)
 
@@ -1269,50 +1276,57 @@ set_softmodem_sighandler () at /oai-ran/executables/softmodem-common.c:231
 
 ### 9.3 Pegatron C3 Integration (lavoisier)
 
-**Status:** ⚠️ **Blocked - SR-IOV VLAN Issue**
+**Status:** ✅ **Operational**
 
-| Parameter | Value |
-|-----------|-------|
-| O-RU Model | Pegatron C3 4T4R |
-| Worker Node | lavoisier |
-| NIC | Intel XXV710 25GbE |
-| Issue | VIRTCHNL mailbox state |
+| Parameter   | Value                                  |
+| ----------- | -------                                |
+| O-RU Model  | Pegatron C3 4T4R                       |
+| Worker Node | lavoisier                              |
+| NIC         | ~~Intel XXV710~~                       |
+|             | Intel E810-XXV                         |
+| Issue       | VIRTCHNL mailbox state on Intel XXV710 |
 
-**Problem:**
+> #### Intel XXV710
+> **Problem:**
+>
+> - XXV710 NIC with port VLAN configuration experiences timing-dependent VF initialization failure in containers (~50% success rate).
+> -
+>
+> **Root Cause:**
+>
+> 1. VF created → `iavf` driver auto-binds
+> 2. Port VLAN configured while `iavf` bound
+> 3. Driver switched: `iavf` → `vfio-pci`
+> 4. Container starts (time gap)
+> 5. DPDK initialization catches stale mailbox state
+>
+> **Kernel Evidence:**
+> ```
+> iavf 0000:70:02.0: MAC address assigned
+> i40e 0000:70:00.0: Setting VLAN 3 on VF 0
+> iavf 0000:70:02.0: Removing device
+> vfio-pci 0000:70:02.0: enabling device
+> ```
+>
+> **Solutions Under Evaluation:**
+>
+> 1. Use VLAN 0 + configure at switch level
+> 2. Blacklist `iavf`, setup VFs at boot via systemd
+> 3. Deploy on baremetal (no containerization)
 
-XXV710 NIC with port VLAN configuration experiences timing-dependent VF initialization failure in containers (~50% success rate).
+#### Intel E810-XXV
 
-**Root Cause:**
+| Interface | Status |
+| -         | -      |
+| N2        |  OK      |
+| N3        |  OK      |
+| FH        |        |
+| E2E       |        |
 
-1. VF created → `iavf` driver auto-binds
-2. Port VLAN configured while `iavf` bound
-3. Driver switched: `iavf` → `vfio-pci`
-4. Container starts (time gap)
-5. DPDK initialization catches stale mailbox state
+- FH connection OK
+- E2E Ok
 
-**Kernel Evidence:**
-```
-iavf 0000:70:02.0: MAC address assigned
-i40e 0000:70:00.0: Setting VLAN 3 on VF 0
-iavf 0000:70:02.0: Removing device
-vfio-pci 0000:70:02.0: enabling device
-```
 
-![VLAN Issue](../study-note-gnb-gh72-kubernetes/image%201.png)
-
-**Tested Configurations:**
-
-| VLAN | Mode | Success Rate |
-|------|------|--------------|
-| 0 | Any | 100% |
-| 3 | Baremetal | 100% |
-| 3 | Container | ~50% |
-
-**Solutions Under Evaluation:**
-
-1. Use VLAN 0 + configure at switch level
-2. Blacklist `iavf`, setup VFs at boot via systemd
-3. Deploy on baremetal (no containerization)
 
 ### 9.4 Foxconn Integration
 
@@ -1414,31 +1428,274 @@ kubectl logs -n 5gs-cn <amf-pod> | tail -20
 
 ![UE Attach](../study-note-gnb-gh72-kubernetes/image%2010.png)
 
-### 10.4 Data Plane Test
 
-**From UE, run speed test:**
-```bash
-# On UE with 5G connection
-speedtest-cli
+### 10.4 Data Plane Test: Lavoisier - Metanoia Jura O-RU
+
+#### GNB GTP DL
+
+![UE Iperf](../assets/metrics/lavoisier-jura-DL-GNB_GTP.png)
+
+#### GNB GTP UL
+![GTP Iperf](../assets/metrics/lavoisier-jura-UL-GNB_GTP.png)
+
+#### UE Iperf DL
+```log
+onnecting to host 192.168.8.82, port 5201
+Reverse mode, remote host 192.168.8.82 is sending
+[  4] local 10.45.0.3 port 50547 connected to 192.168.8.82 port 5201
+[ ID] Interval           Transfer     Bandwidth       Jitter    Lost/Total Datagrams
+[  4]   0.00-1.00   sec  31.4 MBytes   263 Mbits/sec  0.401 ms  0/25316 (0%)
+[  4]   1.00-2.00   sec  28.0 MBytes   235 Mbits/sec  0.028 ms  0/22555 (0%)
+[  4]   2.00-3.00   sec  26.7 MBytes   224 Mbits/sec  0.072 ms  0/21548 (0%)
+[  4]   3.00-4.00   sec  24.2 MBytes   203 Mbits/sec  0.023 ms  12743/32274 (39%)
+[  4]   4.00-5.00   sec  25.9 MBytes   217 Mbits/sec  0.022 ms  21120/41999 (50%)
+[  4]   5.00-6.00   sec  25.3 MBytes   212 Mbits/sec  0.017 ms  18198/38618 (47%)
+[  4]   6.00-7.00   sec  25.2 MBytes   212 Mbits/sec  0.018 ms  23040/43376 (53%)
+[  4]   7.00-8.00   sec  25.9 MBytes   217 Mbits/sec  0.026 ms  24056/44962 (54%)
+[  4]   8.00-9.00   sec  25.2 MBytes   211 Mbits/sec  0.017 ms  23197/43522 (53%)
+[  4]   9.00-10.00  sec  25.6 MBytes   215 Mbits/sec  0.019 ms  22155/42784 (52%)
+[  4]  10.00-11.00  sec  25.6 MBytes   214 Mbits/sec  0.018 ms  23846/44461 (54%)
+[  4]  11.00-12.00  sec  25.1 MBytes   210 Mbits/sec  0.024 ms  22501/42739 (53%)
+[  4]  12.00-13.00  sec  25.7 MBytes   215 Mbits/sec  0.021 ms  22960/43681 (53%)
+[  4]  13.00-14.00  sec  25.6 MBytes   214 Mbits/sec  0.016 ms  23721/44343 (53%)
+[  4]  14.00-15.00  sec  25.6 MBytes   215 Mbits/sec  0.022 ms  22949/43592 (53%)
+[  4]  15.00-16.00  sec  25.2 MBytes   212 Mbits/sec  0.018 ms  22455/42817 (52%)
+[  4]  16.00-17.00  sec  26.1 MBytes   219 Mbits/sec  0.022 ms  23404/44462 (53%)
+[  4]  17.00-18.00  sec  25.9 MBytes   217 Mbits/sec  0.019 ms  23429/44346 (53%)
+[  4]  18.00-19.00  sec  25.2 MBytes   212 Mbits/sec  0.022 ms  22492/42782 (53%)
+[  4]  19.00-20.00  sec  25.3 MBytes   212 Mbits/sec  0.021 ms  22306/42694 (52%)
+[  4]  20.00-21.00  sec  24.8 MBytes   208 Mbits/sec  0.022 ms  22598/42640 (53%)
+[  4]  21.00-22.00  sec  26.0 MBytes   218 Mbits/sec  0.024 ms  23711/44667 (53%)
+[  4]  22.00-23.00  sec  28.5 MBytes   239 Mbits/sec  0.017 ms  26600/49582 (54%)
+[  4]  23.00-24.00  sec  25.7 MBytes   216 Mbits/sec  0.021 ms  21218/41941 (51%)
+[  4]  24.00-25.00  sec  25.8 MBytes   216 Mbits/sec  0.032 ms  19214/40031 (48%)
+[  4]  25.00-26.00  sec  25.1 MBytes   211 Mbits/sec  0.017 ms  22396/42676 (52%)
+[  4]  26.00-27.00  sec  26.0 MBytes   218 Mbits/sec  0.019 ms  23524/44519 (53%)
+[  4]  27.00-28.00  sec  25.4 MBytes   213 Mbits/sec  0.019 ms  23077/43543 (53%)
+[  4]  28.00-29.00  sec  25.8 MBytes   216 Mbits/sec  0.019 ms  22851/43645 (52%)
+[  4]  29.00-30.00  sec  25.5 MBytes   214 Mbits/sec  0.023 ms  23051/43613 (53%)
+[  4]  30.00-31.00  sec  24.8 MBytes   208 Mbits/sec  0.016 ms  21854/41820 (52%)
+[  4]  31.00-32.00  sec  25.6 MBytes   215 Mbits/sec  0.019 ms  22849/43494 (53%)
+[  4]  32.00-33.00  sec  25.5 MBytes   214 Mbits/sec  0.015 ms  24823/45391 (55%)
+[  4]  33.00-34.00  sec  26.1 MBytes   219 Mbits/sec  0.022 ms  23329/44382 (53%)
+[  4]  34.00-35.00  sec  25.4 MBytes   213 Mbits/sec  0.027 ms  22279/42769 (52%)
+[  4]  35.00-36.00  sec  25.7 MBytes   216 Mbits/sec  0.014 ms  22921/43656 (53%)
+[  4]  36.00-37.00  sec  25.0 MBytes   210 Mbits/sec  0.018 ms  22391/42577 (53%)
+[  4]  37.00-38.00  sec  24.9 MBytes   209 Mbits/sec  0.019 ms  21953/42042 (52%)
+[  4]  38.00-39.00  sec  26.0 MBytes   218 Mbits/sec  0.017 ms  24366/45310 (54%)
+[  4]  39.00-40.00  sec  25.5 MBytes   214 Mbits/sec  0.022 ms  23831/44382 (54%)
+[  4]  40.00-41.00  sec  25.1 MBytes   211 Mbits/sec  0.017 ms  22500/42775 (53%)
+[  4]  41.00-42.00  sec  25.3 MBytes   212 Mbits/sec  0.027 ms  23148/43550 (53%)
+[  4]  42.00-43.00  sec  25.1 MBytes   210 Mbits/sec  0.015 ms  22451/42682 (53%)
+[  4]  43.00-44.00  sec  25.5 MBytes   214 Mbits/sec  0.019 ms  23969/44562 (54%)
+[  4]  44.00-45.00  sec  24.6 MBytes   207 Mbits/sec  0.030 ms  22718/42587 (53%)
+[  4]  45.00-46.00  sec  26.0 MBytes   218 Mbits/sec  0.026 ms  23627/44561 (53%)
+[  4]  46.00-47.00  sec  25.5 MBytes   214 Mbits/sec  0.027 ms  23766/44344 (54%)
+[  4]  47.00-48.00  sec  25.9 MBytes   218 Mbits/sec  0.021 ms  22851/43768 (52%)
+[  4]  48.00-49.00  sec  25.5 MBytes   214 Mbits/sec  0.017 ms  22976/43570 (53%)
+[  4]  49.00-50.00  sec  28.6 MBytes   240 Mbits/sec  0.016 ms  25681/48748 (53%)
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bandwidth       Jitter    Lost/Total Datagrams
+[  4]   0.00-50.00  sec  2.65 GBytes   455 Mbits/sec  1.681 ms  1106810/2187302 (51%)
+[  4] Sent 2187302 datagrams
 ```
 
-**Monitor gNB throughput:**
-```bash
-kubectl logs -n oai-gnb <pod-name> | grep -E "TX|RX|bytes"
+#### UE Iperf UL
+
+```log
+Connecting to host 192.168.8.82, port 5201
+[  4] local 10.45.0.3 port 56160 connected to 192.168.8.82 port 5201
+[ ID] Interval           Transfer     Bandwidth       Total Datagrams
+[  4]   0.00-1.00   sec  2.90 MBytes  24.3 Mbits/sec  2337
+[  4]   1.00-2.00   sec  5.20 MBytes  43.6 Mbits/sec  4191
+[  4]   2.00-3.00   sec  6.65 MBytes  55.8 Mbits/sec  5364
+[  4]   3.00-4.00   sec  6.66 MBytes  55.9 Mbits/sec  5372
+[  4]   4.00-5.00   sec  6.62 MBytes  55.5 Mbits/sec  5337
+[  4]   5.00-6.00   sec  6.56 MBytes  55.0 Mbits/sec  5290
+[  4]   6.00-7.00   sec  6.68 MBytes  56.0 Mbits/sec  5387
+[  4]   7.00-8.00   sec  6.49 MBytes  54.4 Mbits/sec  5233
+[  4]   8.00-9.00   sec  6.70 MBytes  56.2 Mbits/sec  5401
+[  4]   9.00-10.00  sec  6.43 MBytes  53.9 Mbits/sec  5183
+[  4]  10.00-11.00  sec  8.40 MBytes  70.5 Mbits/sec  6775
+[  4]  11.00-12.00  sec  11.2 MBytes  93.5 Mbits/sec  8995
+[  4]  12.00-13.00  sec  9.29 MBytes  77.9 Mbits/sec  7491
+[  4]  13.00-14.00  sec  6.45 MBytes  54.1 Mbits/sec  5204
+[  4]  14.00-15.00  sec  6.51 MBytes  54.6 Mbits/sec  5250
+[  4]  15.00-16.00  sec  6.63 MBytes  55.6 Mbits/sec  5348
+[  4]  16.00-17.00  sec  6.54 MBytes  54.8 Mbits/sec  5274
+[  4]  17.00-18.00  sec  6.59 MBytes  55.3 Mbits/sec  5316
+[  4]  18.00-19.00  sec  6.50 MBytes  54.5 Mbits/sec  5243
+[  4]  19.00-20.00  sec  6.53 MBytes  54.8 Mbits/sec  5266
+[  4]  20.00-21.00  sec  9.15 MBytes  76.7 Mbits/sec  7379
+[  4]  21.00-22.00  sec  10.3 MBytes  86.5 Mbits/sec  8320
+[  4]  22.00-23.00  sec  8.84 MBytes  74.1 Mbits/sec  7127
+[  4]  23.00-24.00  sec  6.68 MBytes  56.0 Mbits/sec  5386
+[  4]  24.00-25.00  sec  6.41 MBytes  53.8 Mbits/sec  5173
+[  4]  25.00-26.00  sec  6.61 MBytes  55.4 Mbits/sec  5329
+[  4]  26.00-27.00  sec  6.64 MBytes  55.7 Mbits/sec  5355
+[  4]  27.00-28.00  sec  6.52 MBytes  54.7 Mbits/sec  5261
+[  4]  28.00-29.00  sec  6.58 MBytes  55.2 Mbits/sec  5309
+[  4]  29.00-30.00  sec  6.62 MBytes  55.6 Mbits/sec  5343
+[  4]  30.00-31.00  sec  6.53 MBytes  54.7 Mbits/sec  5264
+[  4]  31.00-32.00  sec  6.60 MBytes  55.4 Mbits/sec  5325
+[  4]  32.00-33.00  sec  6.55 MBytes  55.0 Mbits/sec  5286
+[  4]  33.00-34.00  sec  6.58 MBytes  55.2 Mbits/sec  5310
+[  4]  34.00-35.00  sec  6.60 MBytes  55.4 Mbits/sec  5326
+[  4]  35.00-36.00  sec  6.55 MBytes  54.9 Mbits/sec  5283
+[  4]  36.00-37.00  sec  11.9 MBytes  99.6 Mbits/sec  9571
+[  4]  37.00-38.00  sec  11.3 MBytes  94.5 Mbits/sec  9084
+[  4]  38.00-39.00  sec  6.17 MBytes  51.8 Mbits/sec  4976
+[  4]  39.00-40.00  sec  6.58 MBytes  55.2 Mbits/sec  5304
+[  4]  40.00-41.00  sec  8.94 MBytes  75.0 Mbits/sec  7215
+[  4]  41.00-42.00  sec  10.9 MBytes  91.8 Mbits/sec  8829
+[  4]  42.00-43.00  sec  9.18 MBytes  77.0 Mbits/sec  7405
+[  4]  43.00-44.00  sec  6.46 MBytes  54.2 Mbits/sec  5207
+[  4]  44.00-45.00  sec  6.52 MBytes  54.7 Mbits/sec  5255
+[  4]  45.00-46.00  sec  6.54 MBytes  54.9 Mbits/sec  5276
+[  4]  46.00-47.00  sec  6.52 MBytes  54.7 Mbits/sec  5262
+[  4]  47.00-48.00  sec  6.70 MBytes  56.2 Mbits/sec  5401
+[  4]  48.00-49.00  sec  6.57 MBytes  55.1 Mbits/sec  5301
+[  4]  49.00-50.00  sec  6.61 MBytes  55.4 Mbits/sec  5332
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bandwidth       Jitter    Lost/Total Datagrams
+[  4]   0.00-50.00  sec   360 MBytes  60.4 Mbits/sec  5.218 ms  0/290438 (0%)
+[  4] Sent 290438 datagrams
 ```
 
-**Expected stable throughput:**
+### 10.4 Data Plane Test: Lavoisier - Pegatron
+
+#### GNB GTP DL
+
+![](../assets/metrics/lavoisier-pegatron-DL-GNB_GTP.png)
+
+#### GNB GTP UL
+
+![](../assets/metrics/lavoisier-pegatron-UL-GNB_GTP.png)
+
+#### UE Iperf DL
+```log
+Connecting to host 192.168.8.82, port 5201
+Reverse mode, remote host 192.168.8.82 is sending
+[  4] local 10.45.0.10 port 47897 connected to 192.168.8.82 port 5201
+[ ID] Interval           Transfer     Bandwidth       Jitter    Lost/Total Datagrams
+[  4]   0.00-1.00   sec  28.5 MBytes   239 Mbits/sec  0.218 ms  0/23007 (0%)
+[  4]   1.00-2.00   sec  54.5 MBytes   458 Mbits/sec  0.018 ms  0/43975 (0%)
+[  4]   2.00-3.00   sec  76.8 MBytes   643 Mbits/sec  0.191 ms  0/61908 (0%)
+[  4]   3.00-4.00   sec  70.6 MBytes   593 Mbits/sec  0.016 ms  0/56949 (0%)
+[  4]   4.00-5.00   sec  54.0 MBytes   453 Mbits/sec  0.017 ms  0/43582 (0%)
+[  4]   5.00-6.00   sec  69.7 MBytes   585 Mbits/sec  0.005 ms  94/56314 (0.17%)
+[  4]   6.00-7.00   sec  70.5 MBytes   591 Mbits/sec  0.016 ms  58/56891 (0.1%)
+[  4]   7.00-8.00   sec  57.9 MBytes   486 Mbits/sec  0.018 ms  0/46699 (0%)
+[  4]   8.00-9.00   sec  53.3 MBytes   447 Mbits/sec  0.017 ms  0/43027 (0%)
+[  4]   9.00-10.00  sec  53.4 MBytes   448 Mbits/sec  0.016 ms  0/43046 (0%)
+[  4]  10.00-11.00  sec  53.4 MBytes   448 Mbits/sec  0.018 ms  0/43034 (0%)
+[  4]  11.00-12.00  sec  53.2 MBytes   446 Mbits/sec  0.023 ms  0/42893 (0%)
+[  4]  12.00-13.00  sec  50.9 MBytes   427 Mbits/sec  0.025 ms  0/41044 (0%)
+[  4]  13.00-14.00  sec  55.9 MBytes   469 Mbits/sec  0.022 ms  93/45198 (0.21%)
+[  4]  14.00-15.00  sec  53.3 MBytes   447 Mbits/sec  0.021 ms  0/42975 (0%)
+[  4]  15.00-16.00  sec  53.4 MBytes   448 Mbits/sec  0.016 ms  0/43102 (0%)
+[  4]  16.00-17.00  sec  54.1 MBytes   454 Mbits/sec  0.017 ms  0/43616 (0%)
+[  4]  17.00-18.00  sec  53.6 MBytes   450 Mbits/sec  0.017 ms  0/43257 (0%)
+[  4]  18.00-19.00  sec  51.8 MBytes   435 Mbits/sec  0.026 ms  249/42041 (0.59%)
+[  4]  19.00-20.00  sec  56.5 MBytes   474 Mbits/sec  0.026 ms  0/45585 (0%)
+[  4]  20.00-21.00  sec  53.9 MBytes   452 Mbits/sec  0.018 ms  0/43453 (0%)
+[  4]  21.00-22.00  sec  54.0 MBytes   453 Mbits/sec  0.017 ms  0/43566 (0%)
+[  4]  22.00-23.00  sec  54.0 MBytes   453 Mbits/sec  0.022 ms  0/43586 (0%)
+[  4]  23.00-24.00  sec  53.9 MBytes   452 Mbits/sec  0.020 ms  82/43518 (0.19%)
+[  4]  24.00-25.00  sec  50.1 MBytes   420 Mbits/sec  0.316 ms  0/40403 (0%)
+[  4]  25.00-26.00  sec  58.1 MBytes   488 Mbits/sec  0.024 ms  0/46895 (0%)
+[  4]  26.00-27.00  sec  54.1 MBytes   454 Mbits/sec  0.016 ms  0/43619 (0%)
+[  4]  27.00-28.00  sec  54.0 MBytes   453 Mbits/sec  0.017 ms  0/43576 (0%)
+[  4]  28.00-29.00  sec  53.9 MBytes   452 Mbits/sec  0.017 ms  0/43468 (0%)
+[  4]  29.00-30.00  sec  53.9 MBytes   452 Mbits/sec  0.038 ms  0/43458 (0%)
+[  4]  30.00-31.00  sec  49.2 MBytes   412 Mbits/sec  0.021 ms  43/39697 (0.11%)
+[  4]  31.00-32.00  sec  59.0 MBytes   495 Mbits/sec  0.018 ms  0/47560 (0%)
+[  4]  32.00-33.00  sec  54.1 MBytes   454 Mbits/sec  0.018 ms  0/43638 (0%)
+[  4]  33.00-34.00  sec  54.0 MBytes   453 Mbits/sec  0.017 ms  0/43520 (0%)
+[  4]  34.00-35.00  sec  54.0 MBytes   453 Mbits/sec  0.020 ms  0/43583 (0%)
+[  4]  35.00-36.00  sec  53.2 MBytes   447 Mbits/sec  0.021 ms  0/42942 (0%)
+[  4]  36.00-37.00  sec  52.1 MBytes   437 Mbits/sec  0.023 ms  0/42023 (0%)
+[  4]  37.00-38.00  sec  63.9 MBytes   536 Mbits/sec  0.017 ms  7/51544 (0.014%)
+[  4]  38.00-39.00  sec  53.5 MBytes   449 Mbits/sec  0.024 ms  0/43147 (0%)
+[  4]  39.00-40.00  sec  53.4 MBytes   448 Mbits/sec  0.027 ms  0/43044 (0%)
+[  4]  40.00-41.00  sec  53.4 MBytes   448 Mbits/sec  0.018 ms  0/43080 (0%)
+[  4]  41.00-42.00  sec  53.0 MBytes   444 Mbits/sec  0.018 ms  0/42713 (0%)
+[  4]  42.00-43.00  sec  49.8 MBytes   418 Mbits/sec  0.018 ms  0/40179 (0%)
+[  4]  43.00-44.00  sec  57.2 MBytes   480 Mbits/sec  0.017 ms  0/46115 (0%)
+[  4]  44.00-45.00  sec  53.4 MBytes   448 Mbits/sec  0.016 ms  0/43106 (0%)
+[  4]  45.00-46.00  sec  56.3 MBytes   472 Mbits/sec  0.023 ms  60/45436 (0.13%)
+[  4]  46.00-47.00  sec  53.4 MBytes   448 Mbits/sec  0.018 ms  0/43100 (0%)
+[  4]  47.00-48.00  sec  51.7 MBytes   434 Mbits/sec  0.023 ms  0/41718 (0%)
+[  4]  48.00-49.00  sec  53.6 MBytes   450 Mbits/sec  0.018 ms  0/43272 (0%)
+[  4]  49.00-50.00  sec  54.8 MBytes   460 Mbits/sec  0.017 ms  0/44233 (0%)
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bandwidth       Jitter    Lost/Total Datagrams
+[  4]   0.00-50.00  sec  2.69 GBytes   461 Mbits/sec  0.025 ms  686/2218031 (0.031%)
+[  4] Sent 2218031 datagrams
+
 ```
-UE a2cb: MAC:    TX    6351082 RX  1379955816 bytes
-UE a2cb: LCID 1: TX       1133 RX        5069 bytes
-UE a2cb: LCID 4: TX     196340 RX  1376402955 bytes
+
+### UE Iperf UL
+
+```log
+Connecting to host 192.168.8.82, port 5201
+[  4] local 10.45.0.10 port 51986 connected to 192.168.8.82 port 5201
+[ ID] Interval           Transfer     Bandwidth       Total Datagrams
+[  4]   0.00-1.00   sec  4.36 MBytes  36.6 Mbits/sec  3517
+[  4]   1.00-2.00   sec  5.76 MBytes  48.3 Mbits/sec  4649
+[  4]   2.00-3.00   sec  6.47 MBytes  54.2 Mbits/sec  5222
+[  4]   3.00-4.00   sec  6.51 MBytes  54.7 Mbits/sec  5251
+[  4]   4.00-5.00   sec  6.57 MBytes  55.1 Mbits/sec  5299
+[  4]   5.00-6.00   sec  6.45 MBytes  54.1 Mbits/sec  5204
+[  4]   6.00-7.00   sec  6.51 MBytes  54.6 Mbits/sec  5248
+[  4]   7.00-8.00   sec  6.65 MBytes  55.8 Mbits/sec  5367
+[  4]   8.00-9.00   sec  9.41 MBytes  78.9 Mbits/sec  7590
+[  4]   9.00-10.00  sec  7.78 MBytes  65.3 Mbits/sec  6277
+[  4]  10.00-11.00  sec  6.07 MBytes  51.0 Mbits/sec  4900
+[  4]  11.00-12.00  sec  6.58 MBytes  55.2 Mbits/sec  5304
+[  4]  12.00-13.00  sec  6.43 MBytes  53.9 Mbits/sec  5185
+[  4]  13.00-14.00  sec  6.47 MBytes  54.3 Mbits/sec  5220
+[  4]  14.00-15.00  sec  6.53 MBytes  54.8 Mbits/sec  5269
+[  4]  15.00-16.00  sec  6.57 MBytes  55.1 Mbits/sec  5301
+[  4]  16.00-17.00  sec  6.64 MBytes  55.7 Mbits/sec  5354
+[  4]  17.00-18.00  sec  6.47 MBytes  54.3 Mbits/sec  5221
+[  4]  18.00-19.00  sec  6.74 MBytes  56.5 Mbits/sec  5435
+[  4]  19.00-20.00  sec  6.44 MBytes  54.1 Mbits/sec  5198
+[  4]  20.00-21.00  sec  6.69 MBytes  56.1 Mbits/sec  5397
+[  4]  21.00-22.00  sec  6.49 MBytes  54.4 Mbits/sec  5235
+[  4]  22.00-23.00  sec  7.51 MBytes  63.0 Mbits/sec  6057
+[  4]  23.00-24.00  sec  8.34 MBytes  70.0 Mbits/sec  6730
+[  4]  24.00-25.00  sec  7.87 MBytes  66.0 Mbits/sec  6346
+[  4]  25.00-26.00  sec  6.51 MBytes  54.6 Mbits/sec  5247
+[  4]  26.00-27.00  sec  6.73 MBytes  56.4 Mbits/sec  5426
+[  4]  27.00-28.00  sec  6.64 MBytes  55.7 Mbits/sec  5359
+[  4]  28.00-29.00  sec  6.56 MBytes  55.0 Mbits/sec  5289
+[  4]  29.00-30.00  sec  6.59 MBytes  55.3 Mbits/sec  5318
+[  4]  30.00-31.00  sec  6.64 MBytes  55.7 Mbits/sec  5358
+[  4]  31.00-32.00  sec  6.56 MBytes  55.0 Mbits/sec  5290
+[  4]  32.00-33.00  sec  6.58 MBytes  55.2 Mbits/sec  5309
+[  4]  33.00-34.00  sec  6.57 MBytes  55.1 Mbits/sec  5302
+[  4]  34.00-35.00  sec  6.14 MBytes  51.5 Mbits/sec  4951
+[  4]  35.00-36.00  sec  6.61 MBytes  55.5 Mbits/sec  5334
+[  4]  36.00-37.00  sec  6.53 MBytes  54.8 Mbits/sec  5270
+[  4]  37.00-38.00  sec  6.47 MBytes  54.3 Mbits/sec  5219
+[  4]  38.00-39.00  sec  6.43 MBytes  54.0 Mbits/sec  5189
+[  4]  39.00-40.00  sec  6.43 MBytes  53.9 Mbits/sec  5187
+[  4]  40.00-41.00  sec  6.61 MBytes  55.4 Mbits/sec  5329
+[  4]  41.00-42.00  sec  6.34 MBytes  53.2 Mbits/sec  5111
+[  4]  42.00-43.00  sec  6.55 MBytes  55.0 Mbits/sec  5285
+[  4]  43.00-44.00  sec  6.50 MBytes  54.6 Mbits/sec  5246
+[  4]  44.00-45.00  sec  6.68 MBytes  56.0 Mbits/sec  5388
+[  4]  45.00-46.00  sec  6.52 MBytes  54.7 Mbits/sec  5259
+[  4]  46.00-47.00  sec  6.48 MBytes  54.4 Mbits/sec  5228
+[  4]  47.00-48.00  sec  6.51 MBytes  54.6 Mbits/sec  5250
+[  4]  48.00-49.00  sec  6.61 MBytes  55.4 Mbits/sec  5329
+[  4]  49.00-50.00  sec  6.61 MBytes  55.5 Mbits/sec  5333
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bandwidth       Jitter    Lost/Total Datagrams
+[  4]   0.00-50.00  sec   332 MBytes  55.7 Mbits/sec  0.474 ms  0/267579 (0%)
+[  4] Sent 267579 datagrams
 ```
-
-**Monitor via Prometheus/Grafana:**
-
-![Control Plane Traffic](../study-note-gnb-gh72-kubernetes/image%2012.png)
-
-![User Plane Traffic](../study-note-gnb-gh72-kubernetes/image%2013.png)
 
 ---
 
