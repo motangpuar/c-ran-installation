@@ -12,7 +12,11 @@ Branch: `production` | Last Updated: 2025-01-01
 - `Yosafat Marselino`
 
 **O-RU Integration:**
-- `Summer`, `Johnson`
+- `Summer`, `Johnson`, `Ming`
+
+**End-to-end Tester**
+
+- `Ming`
 
 **References:**
 - [OAI FHI 7.2 Tutorial](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/ORAN_FHI7.2_Tutorial.md)
@@ -42,8 +46,6 @@ Branch: `production` | Last Updated: 2025-01-01
 
 ## Progress Checklist
 
-### Environment Setup
-
 | Item                                                     | Status   |
 | ------                                                   | -------- |
 | [BIOS Configuration](#2-bios-configuration)              | ✅       |
@@ -53,21 +55,11 @@ Branch: `production` | Last Updated: 2025-01-01
 | [Configure SCTP](#33-configure-sctp)                     | ✅       |
 | [Install DPDK](#34-install-dpdk)                         | ✅       |
 | [Configure PTP](#35-configure-ptp)                       | ✅       |
-
-### Kubernetes Cluster
-
-| Item                                                     | Status   |
-| ------                                                   | -------- |
 | [Master Node Setup](#4-kubernetes-cluster-setup)         | ✅       |
 | [CNI Installation (Cilium)](#42-install-cni-cilium)      | ✅       |
 | [CNI Installation (Multus)](#43-install-cni-multus)      | ✅       |
 | [Worker Node Join](#44-worker-node-configuration)        | ✅       |
 | [Kubelet CPU Manager](#45-configure-kubelet-cpu-manager) | ✅       |
-
-### SR-IOV Setup
-
-| Item                                                        | Status   |
-| ------                                                      | -------- |
 | [Install SR-IOV Operator](#5-sr-iov-network-configuration)  | ✅       |
 | [Configure SR-IOV Policy](#52-create-sr-iov-network-policy) | ✅       |
 | [Verify VF Creation](#53-verify-sr-iov-configuration)       | ✅       |
@@ -76,19 +68,30 @@ Branch: `production` | Last Updated: 2025-01-01
 
 | Item                                                          | Status   |  Remarks            |
 | ------                                                        | -------- | --           |
-| [Build OAI gNB Container](#6-build-oai-gnb-container)         | ✅       |              |
-| [Handle CPU Architecture](#61-cpu-architecture-compatibility) | ⚠️       | worker-rt-01 cant run the latest oai image. Other workers can. |
+| [Build OAI gNB Container](#6-build-oai-gnb-container)         | ✅       |  User can also use prebuilt image from OAI if there is no modifications performed on GNB source code.            |
+| [Handle CPU Architecture for Old CPUs](#61-cpu-architecture-compatibility) | ⚠️       | - worker-rt-01 cant run the latest oai image. Other workers can.<br />- OAI team confirmed for latest release with compression minimum requirments of CPU should support AVX512 |
 | [Deploy Core Network](#7-deploy-core-network)                 | ✅       |              |
-| [Deploy OAI gNB](#8-deploy-oai-gnb)                           | ✅       |              |
+| [Deploy OAI gNB 7.2](#8-deploy-oai-gnb)                           | ✅       |              |
 
 ### O-RU Integration Status
 
 | Vendor   | O-RU Model   | Connection   | Worker Node   | NIC            | Status   | Section                                       |
 | -------- | ------------ | ------------ | ------------- | ---            | -------- | ---------                                     |
-| LiteON   | C3 4T4R      | FH 7.2       | worker-rt-00  | Intel E810-XXV | ✅       | [9.1](#91-liteon-c3-integration-worker-rt-00) |
+| [LiteON]() | C3 4T4R      | FH 7.2       | worker-rt-00  | Intel E810-XXV | ✅       | [9.1](#91-liteon-c3-integration-worker-rt-00) |
 | Pegatron | C3 4T4R      | FH 7.2       | lavoisier     | Intel E810-XXV | ✅       | [9.3](#93-pegatron-c3-integration-lavoisier)  |
 |          | C3 4T4R      | FH 7.2       | lavoisier     | Intel E810-XXV | ✅       | [9.3](#93-pegatron-c3-integration-lavoisier)  |
 | Jura     | C3 4T4R      | FH 7.2       | lavoisier     | Intel E810-XXV | ✅       | [9.3](#93-pegatron-c3-integration-lavoisier)  |
+
+### O-RU E2E Test Tracker
+
+| Machine   | Node         | O-RU                                                          | DL       | UL          | VLAN | Remarks         |
+| -         | -            | -                                                             | -        | -           | -    | -               |
+| Joule     | worker-rt-00 | Jura                                                          | ...      | ...         | 3    | Worker Reconfig |
+|           |              | Pegatron                                                      | ...      | ...         | 103  | Worker Reconfig |
+|           |              | LiteOn                                                        | ...      | ...         | 6    | Worker Reconfig |
+| Lavoisier | lavoisier    | [**Jura**](#10.4-data-plane-test%3A-lavoisier---pegatron)     | 216 Mbps | 60.041 Mbps | 3    |                 |
+|           |              | [**Pegatron**](#10.4-data-plane-test%3A-lavoisier---pegatron) | 461 Mbps | 55.65 Mbps  | 103  |                 |
+|           |              | [**LiteOn**]()                                                | ...      | ...         | 6    | FH connection OK, UE Cant Find Service |
 
 ### Testing & Validation
 
@@ -99,7 +102,6 @@ Branch: `production` | Last Updated: 2025-01-01
 | [UE Attachment](#103-ue-attachment-test)                    | ✅       |
 | [Data Plane Throughput](#104-data-plane-test)               | ✅       |
 
----
 
 ## Access Information
 
@@ -134,25 +136,31 @@ Branch: `production` | Last Updated: 2025-01-01
 
 ### 1.1 Hardware Specifications
 
+#### Server Specification
+
 | Machine       | CPU Model       | Generation                       | Model ID | Cores       | AV2         | Memory | NIC            | OS          |
 | :---          | :---            | :---                             | :---     | :---        | :---        | :---   | :---           | :---        |
 | **Joule**     | Xeon Gold 6326Y | **3rd Gen (Ice Lake-SP)**        | 106      | 16C/32T     | Support     | 128GB  | Intel E810-XXV | RHEL 9.6 RT |
 | **Lavoisier** | Xeon Gold 6433N | **4th Gen (Sapphire Rapids-SP)** | 143      | **32C/64T** | Support     | 256GB  | Intel E810-XXV | RHEL 9.2 RT |
 | **Newton**    | Xeon E5-2695 v4 | **v4 (Broadwell-EP)**            | 79       | **18C/36T** | **Support** | 64GB   | N/A            | RHEL 9.5 RT |
 
-| Machine   | Node         | O-RU                                                          | DL       | UL          | Remarks         | VLAN |
-| -         | -            | -                                                             | -        | -           | -               | -    |
-| Joule     | worker-rt-00 | Jura                                                          | ...      | ...         | Worker Reconfig | 3    |
-|           |              | Pegatron                                                      | ...      | ...         | Worker Reconfig | 103  |
-|           |              | LiteOn                                                        | ...      | ...         | Worker Reconfig | 6    |
-| Lavoisier | lavoisier    | [**Jura**](#10.4-data-plane-test%3A-lavoisier---pegatron)     | 216 Mbps | 60.041 Mbps |                 | 3    |
-|           |              | [**Pegatron**](#10.4-data-plane-test%3A-lavoisier---pegatron) | 461 Mbps | 55.65 Mbps  |                 | 103  |
-|           |              | [**LiteOn**]()                                                | ...      | ...         | Worker dont have VLAN 6 yet            | 6    |
+
 
 
 ### 1.2 Cluster Network Topology
 
 ![Dell BIOS SR-IOV Setting](../assets/cluser-architecture.png)
+
+**Cluster Nodes**
+
+![image-20251112215535882](/home/infidel/Sync/NTUST/BMW-Lab/LabNotes/template/docs/assets/reports-C-RAN/cluster-nodes.png)
+
+| Node           | Kubernetes version | Remarks                                                            |
+| -              | -                  | -                                                                  |
+| o-cloud-master | v1.31.13           | Master Node                                                        |
+| worker-rt-00   | v1.32.9            | RT Worker Node to run 7.2 GNB                                      |
+| lavoisier      | v1.32.9            | RT Worker Node to run 7.2 GNB                                      |
+| worker-non-rt  | v1.32.9            | Non-RT Worker node to run common non RT services i.e. Core Network |
 
 ---
 
@@ -354,6 +362,7 @@ sudo vi /etc/modprobe.d/sctp_diag-blacklist.conf
 ```
 
 **Load SCTP module:**
+
 ```bash
 # Load module immediately
 sudo modprobe sctp
@@ -1320,7 +1329,7 @@ set_softmodem_sighandler () at /oai-ran/executables/softmodem-common.c:231
 | -         | -      |
 | N2        |  OK      |
 | N3        |  OK      |
-| FH        |        |
+| FH        | OK |
 | E2E       |        |
 
 - FH connection OK
@@ -2302,4 +2311,5 @@ kubectl logs -n oai-gnb <pod> -f | grep -E "Frame|pusch|prach|RAPROC"
 **Document Version:** 1.0
 **Last Updated:** 2025-01-01
 **Maintained By:** BMW Lab Infrastructure Team
-**Contact:** infidel@bmw.lab, yma@bmw.lab
+
+# **Contact:** infidel@bmw.lab, yma@bmw.lab

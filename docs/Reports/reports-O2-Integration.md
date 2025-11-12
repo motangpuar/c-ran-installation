@@ -329,7 +329,7 @@ openstack server list
 
 ---
 
-## 5. StarlingX Installation
+## 5. StarlingX Installation 
 
 
 ### Post Installation
@@ -708,6 +708,139 @@ source /etc/kolla/admin-openrc.sh
 | Ironic dnsmasq error | Volume format issue | Disable inspector/PXE | ⚠️ Workaround | [4.4](#44-ironic-verification) |
 
 ---
+
+
+
+### StarlingX 10.0 Failed to Ceph install
+
+**Issue**
+
+- 
+
+### StarlingX 8.0 Failed to bootstrap due to missing images
+
+**Issue**
+
+- Failed to bootstrap due to missing images (depercated)
+
+```
+TASK [common/push-docker-images : debug] ***********************************************************************************************************************************
+Wednesday 12 November 2025  11:11:16 +0000 (0:00:00.020)       0:21:00.436 **** 
+skipping: [localhost]
+
+TASK [common/push-docker-images : Download images and push to local registry] **********************************************************************************************
+Wednesday 12 November 2025  11:11:16 +0000 (0:00:00.022)       0:21:00.459 **** 
+FAILED - RETRYING: Download images and push to local registry (10 retries left).
+FAILED - RETRYING: Download images and push to local registry (9 retries left).
+FAILED - RETRYING: Download images and push to local registry (8 retries left).
+FAILED - RETRYING: Download images and push to local registry (7 retries left).
+FAILED - RETRYING: Download images and push to local registry (6 retries left).
+FAILED - RETRYING: Download images and push to local registry (5 retries left).
+FAILED - RETRYING: Download images and push to local registry (4 retries left).
+FAILED - RETRYING: Download images and push to local registry (3 retries left).
+FAILED - RETRYING: Download images and push to local registry (2 retries left).
+FAILED - RETRYING: Download images and push to local registry (1 retries left).
+fatal: [localhost]: FAILED! => changed=true 
+  attempts: 10
+  failed_when_result: true
+  msg: non-zero return code
+  rc: 1
+  stderr: |-
+    Traceback (most recent call last):
+      File "/tmp/.ansible-sysadmin/tmp/ansible-tmp-1762946472.3770916-85611-204325389315240/download_images.py", line 338, in <module>
+        raise Exception("Failed to download images %s" % failed_downloads)
+    Exception: Failed to download images ['quay.io/k8scsi/snapshot-controller:v2.0.0-rc2']
+  stderr_lines: <omitted>
+  stdout: |-
+    Image is up to date for sha256:6cab9d1bed1be49c215505c1a438ce0af66eb54b4e95f06e52037fcd36631f3d
+    Image is up to date for sha256:1f99cb6da9a82e81081f65acdad10cdca2e5ec4084f91009bdcff31dd6151d48
+    Image is up to date for sha256:03fa22539fc1ccdb96fb15098e7a02fff03d0e366ce5d80891eb0a3a8594a0c9
+    Image is up to date for sha256:7a53d1e08ef58144850b48d05908b4ef5b611bff99a5a66dbcba7ab9f79433f7
+    Image is up to date for sha256:221177c6082a88ea4f6240ab2450d540955ac6f4d5454f0e15751b653ebda165
+    Image is up to date for sha256:aebe758cef4cd05b9f8cee39758227714d02f42ef3088023c1e3cd454f927a2b
+    Image is up to date for sha256:a4ca41631cc7ac19ce1be3ebf0314ac5f47af7c711f17066006db82ee3b75b03
+    Image is up to date for sha256:45f84749206fc21ec0bc8b410c561a2615da1e9192ac6fdf34900436a91c02cf
+    Image is up to date for sha256:c595bc026ccfe8ba49cddce7b6479d7bbe98f7999bd29c983a5312ee8fe33323
+    Image is up to date for sha256:d4d0783ac01752eab255a7381c936170ff1fc576452f036c5d810e91cf3cea14
+    Image is up to date for sha256:0df214aeb2576c81624837fb761fa49ab8433ed62a3144cacd4a947edd3d3a2d
+    Image is up to date for sha256:baacffa096025944e4d13e026776e1aaafa3862e74a212780800227526577521
+    Image is up to date for sha256:213debde2c3b8c34df33cf3e906168bb7ab94dff4a33ec1c967b1cfd2179fbee
+    Image is up to date for sha256:fd3fd9ab134a864eeb7b2c073c0d90192546f597c60416b81fc4166cca47f29a
+    Image is up to date for sha256:e88ee986c07782169da593fe29651d9df7ace5ec0ecdb4ca02dc990aa3ccac6b
+    Image is up to date for sha256:614615323ea0c7711b1a55922712759ad43b3e65759ff789f614dcbccb20dbd1
+    Image is up to date for sha256:7fb3c2364b87e9241db7549bf11d42c129130f44e930d1ce36523fc693186e89
+    Image is up to date for sha256:0f8457a4c2ecaceac160805013dc3c61c63a1ff3dee74a473a36249a748e0253
+    Image is up to date for sha256:2461b2698dcd5998e3e87a03cedc1bce5b76bfd4ac61ccdef3fc059c64bd8181
+    Image is up to date for sha256:c41e9fcadf5a291120de706b7dfa1af598b9f2ed5138b6dcb9f79a68aad0ef4c
+    Image is up to date for sha256:b5af743e598496e8ebd7a6eb3fea76a6464041581520d1c2315c95f993287303
+    Image is up to date for sha256:d8fece6544a2547e183f84bae63724039c509ba527659f9f65da124f8670948d
+    Image is up to date for sha256:2cb486bbac0f5a94783edc046e751ff9600e8aa1786d09255141a1e960e4fc0a
+    Image is up to date for sha256:dc6302a19621b6dba29445fcc64b0fa73ac1df36bb02c553ca0e6a54f6ba3395
+    Image is up to date for sha256:623ec0d3153915585e02d06b4f76d28339301499a408ca45b6d3e0cbdc38f105
+    Image is up to date for sha256:db7725ef729d74e24d51c93f831fa69b22747e67507f6bc2d7c981d16920ff35
+    Image is up to date for sha256:36736adc2f4b56924e5e3a46cc8f8eaf9b18c3c6aac310b01c200a3f4a6f400c
+    Image is up to date for sha256:4e60e4ce697f12103aeedd200e8abb0352dfd87fd2f64591da2bd923e7824567
+    Image k8s.gcr.io/kube-apiserver:v1.24.4 found on local registry
+    Image k8s.gcr.io/kube-controller-manager:v1.24.4 found on local registry
+    Image k8s.gcr.io/kube-scheduler:v1.24.4 found on local registry
+    Image k8s.gcr.io/kube-proxy:v1.24.4 found on local registry
+    Image k8s.gcr.io/pause:3.7 found on local registry
+    Image k8s.gcr.io/etcd:3.5.3-0 found on local registry
+    Image k8s.gcr.io/coredns/coredns:v1.8.6 found on local registry
+    Image quay.io/calico/cni:v3.24.0 found on local registry
+    Image quay.io/calico/node:v3.24.0 found on local registry
+    Image quay.io/calico/kube-controllers:v3.24.0 found on local registry
+    Image ghcr.io/k8snetworkplumbingwg/multus-cni:v3.9.2 found on local registry
+    Image ghcr.io/k8snetworkplumbingwg/sriov-cni:v2.6.3 found on local registry
+    Image ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin:v3.5.1 found on local registry
+    Image ghcr.io/helm/tiller:v2.16.9 found on local registry
+    Image docker.io/starlingx/armada-image:stx.7.0-v1.0.0 found on local registry
+    Image docker.io/starlingx/n3000-opae:stx.8.0-v1.0.2 found on local registry
+    Image quay.io/stackanetes/kubernetes-entrypoint:v0.3.1 found on local registry
+    Image k8s.gcr.io/pause:3.4.1 found on local registry
+    Image k8s.gcr.io/ingress-nginx/controller:v1.1.1 found on local registry
+    Image k8s.gcr.io/ingress-nginx/kube-webhook-certgen:v1.1.1 found on local registry
+    Image k8s.gcr.io/defaultbackend-amd64:1.5 found on local registry
+    Image docker.io/fluxcd/helm-controller:v0.27.0 found on local registry
+    Image docker.io/fluxcd/source-controller:v0.32.1 found on local registry
+    404 Client Error: Not Found ("manifest unknown: manifest unknown")
+    Image quay.io/k8scsi/snapshot-controller:v2.0.0-rc2 not found on local registry, attempt to download...
+     Image download failed: quay.io/k8scsi/snapshot-controller:v2.0.0-rc2 500 Server Error: Internal Server Error ("unauthorized: access to the requested resource is not authorized")
+    Image quay.io/jetstack/cert-manager-acmesolver:v1.7.1 found on local registry
+    Image quay.io/jetstack/cert-manager-cainjector:v1.7.1 found on local registry
+    Image quay.io/jetstack/cert-manager-controller:v1.7.1 found on local registry
+    Image quay.io/jetstack/cert-manager-webhook:v1.7.1 found on local registry
+    Image quay.io/jetstack/cert-manager-ctl:v1.7.1 found on local registry
+  stdout_lines: <omitted>
+
+PLAY RECAP *****************************************************************************************************************************************************************
+localhost                  : ok=270  changed=107  unreachable=0    failed=1    skipped=329  rescued=0    ignored=0   
+
+Wednesday 12 November 2025  11:21:21 +0000 (0:10:04.536)       0:31:04.995 **** 
+=============================================================================== 
+common/push-docker-images : Download images and push to local registry -------------------------------------------------------------------------------------------- 604.54s
+bootstrap/persist-config : Wait for service endpoints reconfiguration to complete --------------------------------------------------------------------------------- 430.13s
+bootstrap/apply-manifest : Applying puppet bootstrap manifest ----------------------------------------------------------------------------------------------------- 412.86s
+bootstrap/persist-config : Wait for sysinv inventory --------------------------------------------------------------------------------------------------------------- 61.59s
+bootstrap/persist-config : Find old registry secrets in Barbican --------------------------------------------------------------------------------------------------- 60.63s
+bootstrap/persist-config : Saving config in sysinv database -------------------------------------------------------------------------------------------------------- 47.75s
+bootstrap/validate-config : Generate config ini file for python sysinv db population script ------------------------------------------------------------------------ 42.31s
+bootstrap/bringup-essential-services : Add loopback interface ------------------------------------------------------------------------------------------------------ 24.05s
+bootstrap/persist-config : Restart sysinv-agent and sysinv-api to pick up sysinv.conf update ----------------------------------------------------------------------- 14.33s
+common/create-etcd-certs : Generate private key for etcd server and client ------------------------------------------------------------------------------------------ 7.62s
+bootstrap/apply-manifest : Generating static config data ------------------------------------------------------------------------------------------------------------ 7.14s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 5.00s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.85s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.84s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.84s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.83s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.82s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.82s
+bootstrap/validate-config : Check if the supplied address is a valid domain name or ip address ---------------------------------------------------------------------- 4.81s
+bootstrap/persist-config : Append config ini file with Barbican secret uuid ----------------------------------------------------------------------------------------- 3.65s
+```
+
+
 
 ## Network Topology
 
