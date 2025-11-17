@@ -1268,6 +1268,7 @@ kubectl logs -n oai-gnb <pod-name> | grep -E "o-du|pusch|prach"
 | CPU | Broadwell-EP (Model 79) |
 | Issue | Missing AVX512 instructions |
 | NIC | Intel E810-XXV |
+| OAM MAC | ac:1f:6b:40:04:b6  |
 
 **Problem:**
 
