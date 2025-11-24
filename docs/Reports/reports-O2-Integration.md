@@ -1,11 +1,6 @@
-# OpenStack Deployment for O2 IMS Testing
+# O-Cloud Integration with NFO,FOCOM and CICD RAN Testing
 
-![Overall](../assets/O2-IMS-PTI-Development.png)
-
-## Objective
-Deploy minimal OpenStack on RHEL 9 for OSC PTI O2 IMS testing and bare metal provisioning via Redfish.
-
----
+![Overall](../assets/O2-Machines.png)
 
 ## Deployment Progress Tracker
 
@@ -25,9 +20,30 @@ Deploy minimal OpenStack on RHEL 9 for OSC PTI O2 IMS testing and bare metal pro
 | [Deploy full stack](#34-deployment) | ✅ Complete |
 | [Post-deploy configuration](#35-post-deploy) | ✅ Complete |
 | [Install OpenStack CLI](#41-cli-installation) | ✅ Complete |
-| [Integrate OSC IMS Module with OpenStack](#41-cli-installation) | N/A |
 | [Integrate OSC IMS Module with BMW FOCOM and NFO](#41-cli-installation) | N/A |
 ---
+
+## O-Cloud Summary and Interaction With Proposed modules (Contribution)
+
+| **Capability**               | O-Cloud **StarlingX**   | O-Cloud **Redhat OKD**         | Interaction with Proposed Module (NFO and FOCOM) (They run on SMO)
+| ----------------             | ---------------         | -------------------            | -------------------------------------------                                                                                                                                                                                           |
+| **O2-IMS Interface**         | Native oran-o2 IMS      | oran-o2ims operator on RHACM   | • FOCOM queries O2-IMS for resource inventory<br/>• Requests resource allocation via ProvisioningRequest<br/>• Subscribes to resource change notifications<br/>• Federates orchestration across multiple O-Clouds                     |
+| **O2-DMS Interface**         | Native K8s profile      | oran-o2ims DMS on RHACM        | • NFO queries available DeploymentManagers<br/>• Requests NF instantiation via O2-DMS<br/>• Provides NF descriptor and deployment parameters<br/>• Monitors NF deployment lifecycle status                                            |
+| **Multi-Cluster Management** | Distributed cloud       | RHACM hub-spoke                | • FOCOM discovers O-Clouds via O2-IMS registration<br/>• NFO selects target DeploymentManager per test scenario<br/>• Enables federated resource orchestration<br/>• Parallel NF deployments across sites                             |
+| **Resource Allocation**      | Platform resource pools | RHACM managed clusters         | • FOCOM requests compute/storage/network via O2-IMS<br/>• Specifies resource requirements for test workloads<br/>• Receives resource pool allocations<br/>• Tracks capacity across federated O-Clouds                                 |
+| **NF Deployment**            | Helm via DMS            | Helm/operators via DMS         | • NFO sends deployment request to O2-DMS<br/>• Includes NF descriptor with helm charts and values<br/>• O-Cloud DMS instantiates CNF on allocated resources<br/>• Returns deployment status and endpoints                             |
+| **Monitoring**               | Platform exporters      | Prometheus operator            | • NFO queries O2-DMS for NF performance metrics<br/>• FOCOM queries O2-IMS for infrastructure health<br/>• Collects test results via exposed metrics endpoints<br/>• Aggregates data for CI/CD regression analysis upon repated testing variations performed                    |
+
+> **Remarks:**
+> * StarlingX IMS Module: https://gerrit.o-ran-sc.org/r/gitweb?p=pti%2Fo2.git;a=summary
+> * RedHat IMS Module: https://github.com/openshift-kni/oran-o2ims
+> * Proposed NFO: https://github.com/motangpuar/smo-o2/tree/master/nfo/k8s/sol003 -> Proposed as submodule under existing SMO/O2
+>      * Under Review: https://gerrit.o-ran-sc.org/r/c/smo/o2/+/14928
+> * RHACM : RedHat Advanced Cluster Management
+> * PTI : Performance Tuned Infrastructure
+> * hub-spoke: hub (parent cluster, create and manage children cluster), spoke (children cluster, do real workload)
+> * NFO : Create & Manage VF creation
+> * FOCOM : Manage O-Cloud Infrastructure
 
 ## 1. Infrastructure Setup
 
@@ -35,7 +51,6 @@ Deploy minimal OpenStack on RHEL 9 for OSC PTI O2 IMS testing and bare metal pro
 - **Node**: 192.168.8.51
 - **OS**: Centos 9
 - **Resources**: 8GB RAM, 40GB disk
-- **Status**: ✅ Complete
 
 **Network Configuration**:
 - Interface: enp1s0 (192.168.8.51/24)
@@ -45,7 +60,6 @@ Deploy minimal OpenStack on RHEL 9 for OSC PTI O2 IMS testing and bare metal pro
 - **Node**: 192.168.8.35
 - **OS**: Centos 9
 - **Resources**: Available for hypervisor
-- **Status**: ✅ Complete
 
 **Network Configuration**:
 - Interface: ens3 (192.168.8.35/24)
