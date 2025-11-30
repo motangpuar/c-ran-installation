@@ -4,23 +4,59 @@
 
 ## Deployment Progress Tracker
 
-| Task | Status |
-|------|--------|
-| [Install Centos 9 on controller VM](#11-controller-vm-setup) | ✅ Complete |
-| [Install Centos 9 on bare metal compute](#12-compute-node-setup) | ✅ Complete |
-| [Configure Podman + compatibility layer](#13-container-runtime) | ✅ Complete |
-| [Setup SSH keys and passwordless sudo](#14-access-configuration) | ✅ Complete |
-| [Create Python venv and install Kolla](#21-python-environment) | ✅ Complete |
-| [Configure inventory and host_vars](#22-inventory-configuration) | ✅ Complete |
-| [Configure globals.yml](#23-global-configuration) | ✅ Complete |
-| [Download Ironic deploy images](#24-ironic-images) | ✅ Complete |
-| [Generate passwords](#31-password-generation) | ✅ Complete |
-| [Bootstrap servers](#32-bootstrap) | ✅ Complete |
-| [Run prechecks](#33-prechecks) | ✅ Complete |
-| [Deploy full stack](#34-deployment) | ✅ Complete |
-| [Post-deploy configuration](#35-post-deploy) | ✅ Complete |
-| [Install OpenStack CLI](#41-cli-installation) | ✅ Complete |
-| [Integrate OSC IMS Module with BMW FOCOM and NFO](#41-cli-installation) | N/A |
+
+* [O-Cloud Summary and Interaction With Proposed modules (Contribution)](#o-cloud-summary-and-interaction-with-proposed-modules-contribution)
+* [O-Cloud Platform Comparison for gNB RT Workloads](#o-cloud-platform-comparison-for-gnb-rt-workloads)
+* [Architectural Trade-offs](#architectural-trade-offs)
+* [1. Infrastructure Setup](#1-infrastructure-setup)
+    * [1.3 Baremetal Node (RT-Workers)](#13-baremetal-node-rt-workers)
+* [5. StarlingX Installation](#5-starlingx-installation)
+    * [Post Installation](#post-installation)
+* [- ISO: StarlingX.iso](#--iso-starlingxiso)
+        * [Post Installation](#post-installation-1)
+    * [Controller Bootstrap](#controller-bootstrap)
+    * [Controller Setup](#controller-setup)
+    * [Next Steps](#next-steps)
+* [Stage 6: OKD O-Cloud with O2IMS - gNB Deployment Pipeline](#stage-6-okd-o-cloud-with-o2ims---gnb-deployment-pipeline)
+    * [6.1 Objective](#61-objective)
+    * [6.2 Architecture](#62-architecture)
+    * [6.3 Deployment Tracker](#63-deployment-tracker)
+    * [6.4 Step 1: Jumphost Infrastructure Setup](#64-step-1-jumphost-infrastructure-setup)
+    * [6.5 Step 2: O-Cloud Manager Cluster Deployment](#65-step-2-o-cloud-manager-cluster-deployment)
+    * [6.6 Step 3: O2IMS Operator Installation](#66-step-3-o2ims-operator-installation)
+    * [6.7 Step 4: Cluster Template Preparation](#67-step-4-cluster-template-preparation)
+    * [6.8 Step 5: Node Cluster Provisioning (Galileo)](#68-step-5-node-cluster-provisioning-galileo)
+    * [6.9 Step 6: Node Cluster Configuration](#69-step-6-node-cluster-configuration)
+    * [6.10 Step 7: gNB Workload Deployment](#610-step-7-gnb-workload-deployment)
+    * [6.11 Known Issues and Workarounds](#611-known-issues-and-workarounds)
+    * [6.12 References](#612-references)
+    * [Goal](#goal)
+    * [Post Installation](#post-installation-2)
+* [6. O2 IMS Integration](#6-o2-ims-integration)
+    * [6.1 O2 Adapter Installation](#61-o2-adapter-installation)
+        * [6.1.1 Setup Keycloak Dev mode](#611-setup-keycloak-dev-mode)
+    * [6.2 O2 API Configuration](#62-o2-api-configuration)
+    * [6.3 Infrastructure Inventory](#63-infrastructure-inventory)
+    * [6.4 Resource Lifecycle](#64-resource-lifecycle)
+    * [6.5 Notification Service](#65-notification-service)
+* [Access Information](#access-information)
+    * [Horizon Dashboard](#horizon-dashboard)
+    * [CLI Access](#cli-access)
+* [Technical Issues Log](#technical-issues-log)
+    * [StarlingX 10.0 Failed to Ceph install](#starlingx-100-failed-to-ceph-install)
+    * [StarlingX 8.0 Failed to bootstrap due to missing images](#starlingx-80-failed-to-bootstrap-due-to-missing-images)
+* [Network Topology](#network-topology)
+    * [Physical Network](#physical-network)
+    * [Tenant Networks](#tenant-networks)
+    * [Traffic Flow](#traffic-flow)
+* [Key Commands Reference](#key-commands-reference)
+    * [Deployment Operations](#deployment-operations)
+    * [Container Management](#container-management)
+    * [OpenStack Operations](#openstack-operations)
+* [Documentation & References](#documentation--references)
+
+
+
 ---
 
 ## O-Cloud Summary and Interaction With Proposed modules (Contribution)
@@ -45,303 +81,44 @@
 > * NFO : Create & Manage VF creation
 > * FOCOM : Manage O-Cloud Infrastructure
 
+## O-Cloud Platform Comparison for gNB RT Workloads
+
+| Capability | Vanilla K8s | StarlingX | OpenShift/OKD |
+|------------|-------------|-----------|---------------|
+| **O2 Interface** | Absent; must implement externally | Reference implementation<br/>IMS: resource inventory<br/>DMS: NF lifecycle (K8s-native profile) | O-RAN SC INF O2 operator<br/>K release onwards |
+| **RT Kernel** | Operator patches PREEMPT_RT<br/>Manual boot params | Low Latency profile<br/>≤20μs interrupt latency | Node Tuning Operator<br/>Workload hints: `realTime`, `highPowerConsumption` |
+| **CPU Isolation** | Static CPU Manager<br/>Manual `isolcpus`/`nohz_full` | Platform-managed<br/>`windriver.com/isolcpus` resource<br/>SMT-aware allocation | PerformanceProfile CRD<br/>CRI-O annotations disable CFS/IRQ |
+| **SR-IOV** | Manual VF + device-plugin + Multus | Declarative via sysinv<br/>Platform injects VLAN | SR-IOV Network Operator<br/>`SriovNetworkNodePolicy` CRD |
+| **PTP Sync** | Manual linuxptp<br/>No notification API | ptp-notification v2<br/>O-RAN Notification Spec v02.01 | PTP Operator<br/>O-RAN notification requires extension |
+| **NUMA/Hugepages** | Manual kernel args + kubelet | `system host-memory-modify`<br/>Puppet generates params | PerformanceProfile CRD<br/>Topology Manager |
+| **Production Evidence** | N/A | Verizon, Vodafone, KDDI<br/>Tens of thousands of sites<br/>[StarlingX 9.0 PR](https://www.prweb.com/releases/starlingx-9-0-delivers-o-ran-enhancements-empowers-organizations-to-deploy-manage-scale-high-performance-distributed-cloud-infrastructure-302114075.html) | Deutsche Telekom PoC<br/>Ericsson+Dell+Red Hat MWC 2025<br/>[Ericsson O2 Announcement](https://www.ericsson.com/en/news/2025/2/ericsson-reconfirms-open-ran-leadership-by-advancing-o2-interface-industrialization-with-dell-technologies-and-red-hat) |
+| **O-RAN SC Alignment** | None | INF project reference O-Cloud<br/>[O-RAN SC Docs](https://docs.o-ran-sc.org/projects/o-ran-sc-pti-rtp/en/latest/overview.html) | OKD 4.19 multi-node support<br/>[L Release Notes](https://docs.o-ran-sc.org/en/latest/index.html) |
+
+---
+
+## Architectural Trade-offs
+
+| Platform | Strengths | Weaknesses |
+|----------|-----------|------------|
+| **Vanilla K8s** | Maximum portability<br/>Full architectural control<br/>Aligns with external NFO/FOCOM | No O-Cloud abstraction<br/>RT tuning entirely manual<br/>High integration burden |
+| **StarlingX** | Tightly coupled O-Cloud design<br/>Sysinv declarative model<br/>O2 as FluxCD system app | Less flexibility outside O-RAN<br/>Steeper learning curve |
+| **OKD/OpenShift** | General-purpose + telco extensions<br/>Operator-driven lifecycle<br/>Enterprise support | O2 via external components<br/>More assembly effort for full compliance |
+
+---
+
+
 ## 1. Infrastructure Setup
-
-### 1.1 Controller VM Setup
-- **Node**: 192.168.8.51
-- **OS**: Centos 9
-- **Resources**: 8GB RAM, 40GB disk
-
-**Network Configuration**:
-- Interface: enp1s0 (192.168.8.51/24)
-- External: enp8s0 (for Neutron, no IP)
-
-### 1.2 Compute Node Setup
-- **Node**: 192.168.8.35
-- **OS**: Centos 9
-- **Resources**: Available for hypervisor
-
-**Network Configuration**:
-- Interface: ens3 (192.168.8.35/24)
-- Note: Single interface configuration
 
 ### 1.3 Baremetal Node (RT-Workers)
 
-| Node      | Purpose       | Provisioned By   | Redfish Support | CPU | Memory | NIC |
-| --        | --            | --               | --  | --  | --     | --  |
-| Joule     | K8S Worker-RT | Redfish API      | Yes | Saphire    |        |     |
-| Lavoisier | Worker-RT     | Redfish API      | Yes | Saphire   |        |     |
-| Newton    | OKD Worker-RT | OpenStack [ToDo] | Yes | Broadwell    |        |     |
-| Einstein  | Worker-RT     | Manual           | No    | Haskell    |        |     |
+| Node      | Purpose            | Provisioned By | Redfish Support | CPU       | Memory | NIC |
+| --        | --                 | --             | --              | --        | --     | --  |
+| Joule     | Worker-RT          | Redfish API    | Yes             | Saphire   |        |     |
+| Lavoisier | K8S Worker-RT      | Redfish API    | Yes             | Saphire   |        |     |
+| Newton    | O-Cloud RedHat OKD | Manual         | No              | Broadwell |        |     |
+| Einstein  | O-Cloud StarlingX  | Manual         | No              | Haskell   |        |     |
 
 
-### 1.3 Container Runtime
-```bash
-# Install Podman compatibility layer
-sudo dnf install -y podman-docker
-sudo systemctl enable --now podman.socket
-
-# Install Python bindings (system-wide for Ansible)
-sudo pip3 install podman
-```
-
-### 1.4 Access Configuration
-```bash
-# SSH keys
-ssh-keygen -t rsa
-ssh-copy-id root@192.168.8.35
-
-# Passwordless sudo
-echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$USER
-```
-
----
-
-## 2. Kolla-Ansible Installation
-
-### 2.1 Python Environment
-```bash
-python3 -m venv ~/kolla-venv
-source ~/kolla-venv/bin/activate
-pip install -U pip
-pip install 'ansible-core>=2.14,<2.16'
-pip install kolla-ansible==18.1.0
-```
-
-### 2.2 Inventory Configuration
-
-**File**: `~/multinode`
-```ini
-[control]
-controller ansible_host=192.168.8.51 ansible_connection=local
-
-[network]
-controller ansible_connection=local
-
-[compute]
-baremetal-01 ansible_host=192.168.8.35 ansible_user=root ansible_ssh_private_key_file=/home/infidel/.ssh/id_rsa
-
-[monitoring]
-controller ansible_connection=local
-
-[storage]
-controller ansible_connection=local
-
-[deployment]
-localhost ansible_connection=local
-
-[baremetal:children]
-control
-network
-compute
-monitoring
-storage
-```
-**File**: `~/host_vars/controller.yml`
-```yaml
-network_interface: "enp1s0"
-api_interface: "enp1s0"
-neutron_external_interface: "enp8s0"
-```
-
-**File**: `~/host_vars/baremetal-01.yml`
-```yaml
-network_interface: "ens3"
-api_interface: "ens3"
-tunnel_interface: "ens3"
-neutron_external_interface: "ens3"
-```
-
-### 2.3 Global Configuration
-
-**File**: `/etc/kolla/globals.yml`
-```yaml
-kolla_base_distro: "rocky"
-kolla_internal_vip_address: "192.168.8.51"
-kolla_container_engine: "podman"
-network_interface: "enp1s0"
-neutron_external_interface: "enp8s0"
-enable_neutron_provider_networks: "yes"
-
-# Disable unnecessary services
-enable_cinder: "no"
-enable_fluentd: "no"
-enable_haproxy: "no"
-enable_host_os_checks: false
-
-# O2 IMS Requirements
-enable_watcher: "yes"
-
-# Ironic - Redfish virtual media only
-enable_ironic: "yes"
-enable_ironic_ipxe: "no"
-enable_ironic_pxe_uefi: "no"
-enable_ironic_inspector: "no"
-enable_ironic_neutron_agent: "yes"
-ironic_enabled_boot_interfaces: ['redfish-virtual-media']
-ironic_enabled_deploy_interfaces: ['direct']
-ironic_default_boot_interface: 'redfish-virtual-media'
-ironic_default_deploy_interface: 'direct'
-```
-
-### 2.4 Ironic Images
-
-**Download IPA (Ironic Python Agent)**:
-```bash
-sudo mkdir -p /etc/kolla/config/ironic
-cd /etc/kolla/config/ironic
-
-sudo wget https://tarballs.opendev.org/openstack/ironic-python-agent/dib/files/ipa-centos9-stable-2024.1.kernel \
-  -O ironic-agent.kernel
-
-sudo wget https://tarballs.opendev.org/openstack/ironic-python-agent/dib/files/ipa-centos9-stable-2024.1.initramfs \
-  -O ironic-agent.initramfs
-```
-
----
-
-## 3. OpenStack Deployment
-
-### 3.1 Password Generation
-```bash
-cd ~
-source ~/kolla-venv/bin/activate
-kolla-genpwd
-```
-
-### 3.2 Bootstrap
-```bash
-kolla-ansible -i ~/multinode bootstrap-servers
-```
-
-**Actions**:
-- Install Docker/Podman dependencies
-- Configure system requirements
-- Prepare nodes for deployment
-
-### 3.3 Prechecks
-```bash
-kolla-ansible -i ~/multinode prechecks
-```
-
-**Validates**:
-- Network connectivity
-- System requirements
-- Configuration correctness
-
-### 3.4 Deployment
-```bash
-kolla-ansible -i ~/multinode deploy
-```
-
-**Duration**: 15-30 minutes
-**Actions**: Pull images, deploy containers, configure services
-
-### 3.5 Post-Deploy
-```bash
-kolla-ansible -i ~/multinode post-deploy
-```
-
-**Generates**: `/etc/kolla/admin-openrc.sh` (credentials file)
-
----
-
-## 4. Service Verification
-
-### 4.1 CLI Installation
-```bash
-source ~/kolla-venv/bin/activate
-pip install python-openstackclient python-watcherclient
-source /etc/kolla/admin-openrc.sh
-```
-
-### 4.2 Core Services
-```bash
-# Verify all services
-openstack service list
-
-# Check compute services
-openstack compute service list
-
-# Verify hypervisor
-openstack hypervisor list
-```
-
-**Expected Output**:
-| Service | Type | Status |
-|---------|------|--------|
-| keystone | identity | ✅ |
-| nova | compute | ✅ |
-| neutron | network | ✅ |
-| glance | image | ✅ |
-| placement | placement | ✅ |
-| heat | orchestration | ✅ |
-
-### 4.3 Watcher Verification
-```bash
-# Verify Watcher services
-openstack optimize service list
-
-# List available strategies
-openstack optimize strategy list
-
-# Check running containers
-sudo podman ps | grep watcher
-```
-
-**Expected Containers**:
-- `watcher_api`
-- `watcher_decision_engine`
-- `watcher_applier`
-
-### 4.4 Ironic Verification
-```bash
-# List bare metal drivers
-openstack baremetal driver list
-
-# Check Ironic containers
-sudo podman ps | grep ironic
-```
-
-**Status**: ⚠️ Partial - API/Conductor running, dnsmasq volume issue
-
-**Expected Containers**:
-- `ironic_api` ✅
-- `ironic_conductor` ✅
-- `ironic_dnsmasq` ❌ (volume error)
-
-### 4.5 VM Testing
-```bash
-# Download test image
-wget http://download.cirros-cloud.net/0.6.2/cirros-0.6.2-x86_64-disk.img
-
-# Upload image
-openstack image create "cirros" \
-  --file cirros-0.6.2-x86_64-disk.img \
-  --disk-format qcow2 \
-  --container-format bare \
-  --public
-
-# Create network
-openstack network create --share --provider-network-type vxlan demo-net
-openstack subnet create --network demo-net \
-  --subnet-range 10.0.0.0/24 \
-  --gateway 10.0.0.1 \
-  --allocation-pool start=10.0.0.100,end=10.0.0.200 \
-  demo-subnet
-
-# Create flavor
-openstack flavor create --ram 512 --disk 1 --vcpus 1 m1.tiny
-
-# Launch VM
-openstack server create --image cirros --flavor m1.tiny \
-  --network demo-net test-vm
-
-# Verify
-openstack server list
-```
-
----
 
 ## 5. StarlingX Installation
 

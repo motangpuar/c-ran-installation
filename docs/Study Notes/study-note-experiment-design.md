@@ -3,6 +3,7 @@
 
 <!-- vim-markdown-toc GFM -->
 
+* [Testing Query](#testing-query)
 * [Passive Testing](#passive-testing)
     * [1 Parmeters: CPU Increase Scenario](#1-parmeters-cpu-increase-scenario)
     * [Timing Window Tolerance](#timing-window-tolerance)
@@ -50,6 +51,56 @@
 > - 3 O-RU
 > - 1 GNB Vendors
 >  How many permutations of test can be performed automatically on End-to-end
+
+# Testing Query
+
+1. User send testing template
+
+```
+{
+    "test_id": "T01-T03",
+    "node_ip": "192.168.8.74",
+    "runs_per_variant": 1,
+    "artifact_config": {
+        "name": "oai-gnb-test",
+        "repo_url": "https://github.com/motangpuar/ocloud-helm-templates.git",
+        "chart_name": "oai-gnb-fhi-72"
+    },
+    "fixed_params": {
+        "nodeSelector": {
+            "kubernetes.io/hostname": "lavoisier"
+        },
+        "resources": {
+            "define": true,
+            "limits": {
+                "nf": {
+                    "memory": "16Gi",
+                    "hugepages": "10Gi"
+                }
+            },
+            "requests": {
+                "nf": {
+                    "memory": "16Gi",
+                    "hugepages": "10Gi"
+                }
+            }
+        },
+        "config": {
+            "amfhost": "open5gs-amf-ngap.5gs-cn"
+        },
+        "multus": {
+            "ruInterface": {
+                "create": true,
+                "mtu": 9600
+            }
+        }
+    },
+    "test_params": {
+        "cpu_cores": ["0-3", "0-5", "0-8"],
+        "oru_vendor": ["LiteON"]
+    }
+}
+```
 
 
 # Passive Testing
